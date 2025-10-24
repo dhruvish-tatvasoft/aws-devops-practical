@@ -1,0 +1,74 @@
+name: Build, Push & Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ap-south-1
+      DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/node-app-demo:latest
+
+    steps:
+      # 1️⃣ Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3️⃣ Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 4️⃣ Terraform Init + Apply
+      - name: Terraform Init
+        run: terraform -chdir=terraform init
+
+      - name: Terraform Apply
+        run: terraform -chdir=terraform apply -auto-approve
+
+      # 5️⃣ Get EC2 Public IP from Terraform
+      - name: Get EC2 Public IP
+        id: ec2_ip
+        run: echo "EC2_IP=$(terraform -chdir=terraform output -raw ec2_public_ip)" >> $GITHUB_ENV
+
+      # 6️⃣ Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 7️⃣ Build & Push Docker Image
+      - name: Build & Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}
+
+      # 8️⃣ Deploy on EC2
+      - name: SSH into EC2 & Run Container
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ env.EC2_IP }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo apt-get update -y
+            sudo apt-get install docker.io -y
+            sudo systemctl start docker
+            sudo docker pull ${{ env.DOCKER_IMAGE }}
+            sudo docker stop node-app || true
+            sudo docker rm node-app || true
+            sudo docker run -d --name node-app -p 80:8080 ${{ env.DOCKER_IMAGE }}
