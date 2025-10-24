@@ -7,7 +7,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "demo-devops-terraform-state-bucket"            # Replace with your S3 bucket name
+    bucket         = "demo-devops-terraform-state-bucket"     # Replace with your S3 bucket name
     key            = "aws-devops-practical/terraform.tfstate" # Path inside the bucket
     region         = "ap-south-1"                             # S3 bucket region
     dynamodb_table = "terraform-locks"                        # Optional, for state locking
@@ -70,6 +70,28 @@ resource "aws_instance" "NodeAppServer" {
               # Install docker-compose
               curl -L https://github.com/docker/compose/releases/download/1.21.0/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
               chmod +x /usr/local/bin/docker-compose
+
+              # Install CloudWatch Agent for Docker metrics
+              apt-get install -y amazon-cloudwatch-agent
+
+              # Create CloudWatch config
+              cat <<EOT > /opt/aws/amazon-cloudwatch-agent/bin/config.json
+              {
+                "metrics": {
+                  "namespace": "NodeApp",
+                  "metrics_collected": {
+                    "docker": {
+                      "metrics_collection_interval": 60,
+                      "resources": ["*"]
+                    }
+                  }
+                }
+              }
+              EOT
+
+              # Start CloudWatch Agent
+              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+                -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
               EOF
 
   tags = {
