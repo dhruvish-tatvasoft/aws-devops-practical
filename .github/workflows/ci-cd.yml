@@ -50,6 +50,8 @@ jobs:
           aws ec2 start-instances --instance-ids ${{ env.EC2_ID }}
           echo "Waiting for EC2 to be running..."
           aws ec2 wait instance-running --instance-ids ${{ env.EC2_ID }}
+          echo "Waiting for EC2 status checks to pass..."
+          aws ec2 wait instance-status-ok --instance-ids ${{ env.EC2_ID }}
 
       # 7️⃣ Login to Docker Hub
       - name: Login to Docker Hub
