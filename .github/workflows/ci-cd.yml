@@ -76,15 +76,9 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Retry until Docker is available (max 60 tries with 5s interval)
-            n=0
-            until docker --version || [ $n -ge 60 ]; do
-              echo "Waiting for Docker to be ready..."
-              n=$((n+1))
-              sleep 5
-            done
-
-            # Deploy container
+            sudo apt-get update -y
+            sudo apt-get install docker.io -y
+            sudo systemctl start docker
             docker pull ${{ env.DOCKER_IMAGE }}
             docker stop node-app || true
             docker rm node-app || true
